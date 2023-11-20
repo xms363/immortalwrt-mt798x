@@ -14,6 +14,8 @@ local http = require("luci.http")
 local i18n = require("luci.i18n")
 local mtkwifi = require("mtkwifi")
 local sys = require "luci.sys"
+local jsc = require "luci.jsonc"
+local nfs = require "nixio.fs"
 
 local logDisable = 0
 function debug_write(...)
@@ -129,12 +131,23 @@ function __mtkwifi_save_profile(cfgs, path, isProfileSettingsAppliedToDriver)
     end
 end
 
+local __get_default_wan_ifname = function()
+    local boardinfo = jsc.parse(nfs.readfile("/etc/board.json") or "")
+    local wan_ifname = "eth1"
+
+    if type(boardinfo) == "table" and type(boardinfo.network.wan.device) == "string" then
+        wan_ifname = boardinfo.network.wan.device
+    end
+
+    return wan_ifname
+end
+
 local __setup_wan = function(devname)
     local devs = mtkwifi.get_all_devs()
     local profiles = mtkwifi.search_dev_and_profile()
     local cfgs = mtkwifi.load_profile(profiles[devname])
     local dev = devs and devs[devname]
-    local vif = "eth1"
+    local vif = __get_default_wan_ifname()
 
     if cfgs.ApCliEnable ~= "0" and cfgs.ApCliEnable ~= "" and dev.apcli.vifname then
         vif = dev.apcli.vifname
@@ -436,7 +449,7 @@ function __delete_mbss_para(cfgs, vif_idx)
     cfgs["AuthMode"]=mtkwifi.token_set(cfgs["AuthMode"],vif_idx,"")
     cfgs["EncrypType"]=mtkwifi.token_set(cfgs["EncrypType"],vif_idx,"")
     cfgs["session_timeout_interval"]=mtkwifi.token_set(cfgs["session_timeout_interval"],vif_idx,"")
-    cfgs["WscModeOption"]=mtkwifi.token_set(cfgs["WscModeOption"],vif_idx,"")
+    --cfgs["WscModeOption"]=mtkwifi.token_set(cfgs["WscModeOption"],vif_idx,"")
     cfgs["RekeyMethod"]=mtkwifi.token_set(cfgs["RekeyMethod"],vif_idx,"")
     cfgs["PMFMFPC"] = mtkwifi.token_set(cfgs["PMFMFPC"],vif_idx,"")
     cfgs["PMFMFPR"] = mtkwifi.token_set(cfgs["PMFMFPR"],vif_idx,"")
@@ -453,8 +466,8 @@ function __delete_mbss_para(cfgs, vif_idx)
     cfgs["HT_PROTECT"] = mtkwifi.token_set(cfgs["HT_PROTECT"],vif_idx,"")
     cfgs["HT_GI"] = mtkwifi.token_set(cfgs["HT_GI"],vif_idx,"")
     cfgs["HT_OpMode"] = mtkwifi.token_set(cfgs["HT_OpMode"],vif_idx,"")
-    cfgs["HT_TxStream"] = mtkwifi.token_set(cfgs["HT_TxStream"],vif_idx,"")
-    cfgs["HT_RxStream"] = mtkwifi.token_set(cfgs["HT_RxStream"],vif_idx,"")
+    --cfgs["HT_TxStream"] = mtkwifi.token_set(cfgs["HT_TxStream"],vif_idx,"")
+    --cfgs["HT_RxStream"] = mtkwifi.token_set(cfgs["HT_RxStream"],vif_idx,"")
     cfgs["HT_AMSDU"] = mtkwifi.token_set(cfgs["HT_AMSDU"],vif_idx,"")
     cfgs["HT_AutoBA"] = mtkwifi.token_set(cfgs["HT_AutoBA"],vif_idx,"")
     cfgs["IgmpSnEnable"] = mtkwifi.token_set(cfgs["IgmpSnEnable"],vif_idx,"")
@@ -570,7 +583,6 @@ local function __security_cfg(cfgs, vif_idx)
 
     local __authmode = http.formvalue("__authmode") or "Disable"
     cfgs.AuthMode = mtkwifi.token_set(cfgs.AuthMode, vif_idx, __authmode)
-    cfgs.WpaMixPairCipher = ""
     cfgs.PMFMFPC = "0"
     cfgs.PMFMFPR = "0"
     cfgs.PMFSHA256 = "0"
@@ -598,7 +610,6 @@ local function __security_cfg(cfgs, vif_idx)
     elseif __authmode == "WPAPSKWPA2PSK" then
         cfgs.EncrypType = mtkwifi.token_set(cfgs.EncrypType, vif_idx, http.formvalue("__encrypttype") or "AES")
         cfgs.RekeyMethod = mtkwifi.token_set(cfgs.RekeyMethod, vif_idx, "TIME")
-        cfgs.WpaMixPairCipher = "WPA_TKIP_WPA2_AES"
 
     elseif __authmode == "WPA2PSK" then
         cfgs.EncrypType = mtkwifi.token_set(cfgs.EncrypType, vif_idx, http.formvalue("__encrypttype") or "AES")
@@ -952,6 +963,7 @@ function sta_info(ifname)
             end
             table.insert(output, stalist[i])
         end
+        stalist[i].security = stalist[i].AuthMode.."-"..stalist[i].EncryptMode
     end
     http.write_json(output)
 end
@@ -1174,10 +1186,6 @@ function apcli_cfg(dev, vif)
         end
     end
 
-    -- disable ACS for apcli
-    if cfgs.ApCliEnable ~= "0" and cfgs.ApCliEnable ~= "" then
-        cfgs.AutoChannelSelect = "0"
-    end
     -- http.write_json(http.formvalue())
 
     -- Mediatek Adaptive Network

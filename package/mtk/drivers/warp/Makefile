@@ -8,15 +8,11 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=warp
 
-ifeq ($(CONFIG_WARP_CHIPSET),"mt7981")
 PKG_VERSION:=20221209-3e6ae1
-PKG_SOURCE:=mt7981_warp-20221209-3e6ae1-obj.tar.xz
-else
-ifeq ($(CONFIG_WARP_CHIPSET),"mt7986")
-PKG_VERSION:=20221209-3e6ae1
-PKG_SOURCE:=mt7986_warp-20221209-3e6ae1-obj.tar.xz
-endif
-endif
+PKG_SOURCE:=warp_20221209-3e6ae1-src.tar.xz
+
+MT7981_NEW_WOFW_DIR := mt7981-fw-20230411
+MT7986_NEW_WOFW_DIR := mt7986-fw-20230421
 
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
 PKG_KCONFIG:= \
@@ -78,9 +74,17 @@ MAKE_FLAGS += CONFIG_SUPPORT_OPENWRT=y
 define KernelPackage/warp/install
 	$(INSTALL_DIR) $(1)/lib/firmware
 	if [ "$$(CONFIG_WARP_CHIPSET)" = "mt7981" ]; then \
-		cp $(PKG_BUILD_DIR)/bin/7981*WOCPU*_RAM_CODE_release.bin $(1)/lib/firmware/; \
+		if [ "$$(CONFIG_WARP_NEW_FW)" = "y" ]; then \
+			cp ./files/$$(MT7981_NEW_WOFW_DIR)/7981*WOCPU*_RAM_CODE_release.bin $(1)/lib/firmware/; \
+		else \
+			cp $(PKG_BUILD_DIR)/bin/7981*WOCPU*_RAM_CODE_release.bin $(1)/lib/firmware/; \
+		fi; \
 	elif [ "$$(CONFIG_WARP_CHIPSET)" = "mt7986" ]; then \
-		cp $(PKG_BUILD_DIR)/bin/7986*WOCPU*_RAM_CODE_release.bin $(1)/lib/firmware/; \
+		if [ "$$(CONFIG_WARP_NEW_FW)" = "y" ]; then \
+			cp ./files/$$(MT7986_NEW_WOFW_DIR)/7986*WOCPU*_RAM_CODE_release.bin $(1)/lib/firmware/; \
+		else \
+			cp $(PKG_BUILD_DIR)/bin/7986*WOCPU*_RAM_CODE_release.bin $(1)/lib/firmware/; \
+		fi; \
 	fi
 endef
 
