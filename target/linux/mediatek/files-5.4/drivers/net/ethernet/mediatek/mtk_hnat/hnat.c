@@ -42,6 +42,9 @@ EXPORT_SYMBOL(ppe_dev_register_hook);
 void (*ppe_dev_unregister_hook)(struct net_device *dev) = NULL;
 EXPORT_SYMBOL(ppe_dev_unregister_hook);
 
+static int ppe_cnt = 2;
+module_param(ppe_cnt, int, 0);
+
 static void hnat_sma_build_entry(struct timer_list *t)
 {
 	int i;
@@ -729,12 +732,10 @@ static int hnat_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "wan dsa port = %d\n", hnat_priv->wan_dsa_port);
 	}
 
-	err = of_property_read_u32_index(np, "mtketh-ppe-num", 0, &val);
+	hnat_priv->ppe_num = ppe_cnt;
 
-	if (err < 0)
+	if (IS_GMAC1_MODE)
 		hnat_priv->ppe_num = 1;
-	else
-		hnat_priv->ppe_num = val;
 
 	dev_info(&pdev->dev, "ppe num = %d\n", hnat_priv->ppe_num);
 
@@ -764,6 +765,7 @@ static int hnat_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
+	index = 0;
 	prop = of_find_property(np, "ext-devices", NULL);
 	for (name = of_prop_next_string(prop, NULL); name;
 	     name = of_prop_next_string(prop, name), index++) {
@@ -779,6 +781,20 @@ static int hnat_probe(struct platform_device *pdev)
 	for (i = 0; i < MAX_EXT_DEVS && hnat_priv->ext_if[i]; i++) {
 		ext_entry = hnat_priv->ext_if[i];
 		dev_info(&pdev->dev, "ext devices = %s\n", ext_entry->name);
+	}
+
+	index = 0;
+	prop = of_find_property(np, "ext-devices-prefix", NULL);
+	for (name = of_prop_next_string(prop, NULL); name;
+	     name = of_prop_next_string(prop, name), index++) {
+		if (index < MAX_EXT_PREFIX_NUM)
+			hnat_priv->ext_if_prefix[index] = name;
+		else
+			break;
+	}
+
+	for (i = 0; i < MAX_EXT_PREFIX_NUM && hnat_priv->ext_if_prefix[i]; i++) {
+		dev_info(&pdev->dev, "ext device prefix = %s\n", hnat_priv->ext_if_prefix[i]);
 	}
 
 	hnat_priv->lvid = 1;
